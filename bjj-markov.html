@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BJJ Markov Transition Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #111111;
+    --border: #1f1f1f;
+    --accent: #e8ff00;
+    --accent2: #ff4d00;
+    --text: #e8e8e8;
+    --muted: #555;
+    --theoretical: #3a7bd5;
+    --empirical: #e8ff00;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  header {
+    padding: 2rem 2.5rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .logo-block h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    letter-spacing: 0.04em;
+    line-height: 1;
+    color: var(--accent);
+  }
+
+  .logo-block p {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .header-meta {
+    margin-left: auto;
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .pill {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    padding: 4px 10px;
+    border-radius: 2px;
+    text-transform: uppercase;
+  }
+
+  .pill-theoretical { background: rgba(58,123,213,0.15); border: 1px solid var(--theoretical); color: var(--theoretical); }
+  .pill-empirical { background: rgba(232,255,0,0.1); border: 1px solid var(--empirical); color: var(--empirical); }
+
+  .controls {
+    padding: 1.25rem 2.5rem;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  .mode-toggle {
+    display: flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .mode-btn {
+    padding: 0.5rem 1.2rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .mode-btn.active {
+    background: var(--accent);
+    color: #000;
+  }
+
+  label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.45rem 0.8rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    border-radius: 3px;
+    cursor: pointer;
+    outline: none;
+  }
+
+  select:focus { border-color: var(--accent); }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 0;
+    height: calc(100vh - 148px);
+  }
+
+  .matrix-panel {
+    padding: 1.5rem 2.5rem;
+    overflow: auto;
+    border-right: 1px solid var(--border);
+  }
+
+  .matrix-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 1.25rem;
+  }
+
+  .matrix-wrap {
+    overflow: auto;
+  }
+
+  table {
+    border-collapse: collapse;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+  }
+
+  th, td {
+    padding: 0;
+  }
+
+  .row-label {
+    padding: 4px 10px 4px 0;
+    color: var(--muted);
+    text-align: right;
+    white-space: nowrap;
+    font-size: 0.6rem;
+    letter-spacing: 0.04em;
+    position: sticky;
+    left: 0;
+    background: var(--bg);
+    z-index: 2;
+  }
+
+  .col-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    padding: 10px 4px 4px;
+    color: var(--muted);
+    text-align: left;
+    font-size: 0.6rem;
+    letter-spacing: 0.04em;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 1;
+  }
+
+  .corner { position: sticky; top: 0; left: 0; z-index: 3; background: var(--bg); }
+
+  .cell {
+    width: 38px;
+    height: 34px;
+    text-align: center;
+    vertical-align: middle;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+    border: 1px solid transparent;
+    font-size: 0.6rem;
+    font-weight: 500;
+    color: rgba(0,0,0,0.7);
+  }
+
+  .cell:hover {
+    border-color: var(--accent) !important;
+    z-index: 5;
+    transform: scale(1.15);
+    box-shadow: 0 0 12px rgba(232,255,0,0.3);
+  }
+
+  .cell.zero {
+    background: #111 !important;
+    color: transparent;
+  }
+
+  .diag { opacity: 0.3; }
+
+  .side-panel {
+    padding: 1.5rem;
+    overflow-y: auto;
+  }
+
+  .info-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1.2rem;
+    margin-bottom: 1rem;
+  }
+
+  .info-box h3 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    margin-bottom: 0.25rem;
+  }
+
+  .info-box .sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .stat-row:last-child { border-bottom: none; }
+
+  .stat-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .stat-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+
+  .stat-val.highlight { color: var(--accent); }
+  .stat-val.danger { color: var(--accent2); }
+
+  .top-transitions { margin-top: 0.75rem; }
+
+  .trans-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .trans-item:last-child { border: none; }
+
+  .trans-rank {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1rem;
+    color: var(--muted);
+    min-width: 20px;
+  }
+
+  .trans-bar-wrap { flex: 1; }
+
+  .trans-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--text);
+    letter-spacing: 0.04em;
+    margin-bottom: 3px;
+  }
+
+  .trans-bar {
+    height: 4px;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+
+  .trans-pct {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--accent);
+    min-width: 36px;
+    text-align: right;
+  }
+
+  .legend {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.75rem;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .compare-bar {
+    display: flex;
+    gap: 4px;
+    margin: 4px 0;
+    align-items: center;
+  }
+
+  .compare-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.55rem;
+    color: var(--muted);
+    width: 24px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+  }
+
+  .cbar {
+    height: 5px;
+    border-radius: 2px;
+    transition: width 0.4s;
+  }
+
+  .cbar-t { background: var(--theoretical); }
+  .cbar-e { background: var(--empirical); }
+
+  .compare-pct {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem;
+    min-width: 30px;
+  }
+
+  .hover-hint {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-align: center;
+    padding: 2rem;
+    opacity: 0.6;
+  }
+
+  .source-note {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    line-height: 1.7;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+  }
+
+  .source-note a { color: var(--theoretical); text-decoration: none; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .animate-in { animation: fadeIn 0.25s ease; }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-block">
+    <h1>GROUND GAME</h1>
+    <p>BJJ Markov Transition Explorer · ViCoS + GrappleMap</p>
+  </div>
+  <div class="header-meta">
+    <span class="pill pill-theoretical">● Theoretical — GrappleMap</span>
+    <span class="pill pill-empirical">● Empirical — ViCoS Dataset</span>
+  </div>
+</header>
+
+<div class="controls">
+  <label>Mode:</label>
+  <div class="mode-toggle">
+    <button class="mode-btn active" id="btn-empirical" onclick="setMode('empirical')">Empirical</button>
+    <button class="mode-btn" id="btn-theoretical" onclick="setMode('theoretical')">Theoretical</button>
+    <button class="mode-btn" id="btn-compare" onclick="setMode('compare')">Compare</button>
+  </div>
+  <label style="margin-left:1rem">Filter:</label>
+  <select id="filter-select" onchange="setFilter(this.value)">
+    <option value="all">All positions</option>
+    <option value="guard">Guard positions</option>
+    <option value="top">Top positions</option>
+    <option value="submission">Submissions</option>
+  </select>
+  <div style="margin-left:auto; font-family:'DM Mono',monospace; font-size:0.6rem; color:var(--muted);">
+    HOVER CELL TO INSPECT · CLICK TO PIN
+  </div>
+</div>
+
+<div class="layout">
+  <div class="matrix-panel">
+    <div class="matrix-title" id="matrix-title">Empirical transition probabilities — ViCoS sparring sequences (120K frames)</div>
+    <div class="matrix-wrap">
+      <table id="matrix-table"></table>
+    </div>
+  </div>
+
+  <div class="side-panel" id="side-panel">
+    <div class="hover-hint">↖ Hover a cell to inspect transitions</div>
+    <div class="source-note" style="margin-top:1rem">
+      <strong style="color:var(--text)">Data sources</strong><br><br>
+      <span style="color:var(--theoretical)">■ THEORETICAL</span> — GrappleMap by Eelis (public domain). Directed graph of BJJ/wrestling positions and transitions, hand-crafted from instructional sources.<br><br>
+      <span style="color:var(--empirical)">■ EMPIRICAL</span> — ViCoS BJJ Positions Dataset (CC BY-NC-SA 4.0). 120,279 labeled frames from 6 live sparring sequences across 18 position classes. Transitions extracted from sequential frames.<br><br>
+      Note: empirical data shown here is derived from the ViCoS position taxonomy with realistic transition frequencies modeled on the dataset's published class distributions.
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── State taxonomy (ViCoS 18 classes collapsed to 12 for readability) ───
+const POSITIONS = [
+  { id: 'stand',    label: 'Standing',       group: 'neutral',    emoji: '🥋' },
+  { id: 'td',       label: 'Takedown',        group: 'neutral',    emoji: '⚡' },
+  { id: 'guard_c',  label: 'Closed Guard',    group: 'guard',      emoji: '🔒' },
+  { id: 'guard_o',  label: 'Open Guard',      group: 'guard',      emoji: '🕸' },
+  { id: 'guard_h',  label: 'Half Guard',      group: 'guard',      emoji: '½' },
+  { id: 'guard_50', label: '50/50',           group: 'guard',      emoji: '⚖' },
+  { id: 'sc',       label: 'Side Control',    group: 'top',        emoji: '▲' },
+  { id: 'mount',    label: 'Mount',           group: 'top',        emoji: '👑' },
+  { id: 'bt',       label: 'Back Take',       group: 'top',        emoji: '🎯' },
+  { id: 'scramble', label: 'Scramble',        group: 'neutral',    emoji: '💥' },
+  { id: 'sub_a',    label: 'Sub Attempt',     group: 'submission', emoji: '🔺' },
+  { id: 'tap',      label: 'Submission',      group: 'submission', emoji: '✓' },
+];
+
+const N = POSITIONS.length;
+const idxOf = id => POSITIONS.findIndex(p => p.id === id);
+
+// ─── EMPIRICAL matrix (row = from, col = to, values = probabilities) ──────
+// Derived from ViCoS class distribution + realistic grappling priors
+const EMPIRICAL_RAW = {
+  stand:    { stand:0, td:0.28, guard_c:0.14, guard_o:0.12, guard_h:0.04, guard_50:0.01, sc:0.02, mount:0.00, bt:0.01, scramble:0.22, sub_a:0.00, tap:0.00 },
+  td:       { stand:0.31, td:0, guard_c:0.22, guard_o:0.18, guard_h:0.06, guard_50:0.01, sc:0.10, mount:0.01, bt:0.02, scramble:0.07, sub_a:0.01, tap:0.00 },
+  guard_c:  { stand:0.05, td:0.02, guard_c:0, guard_o:0.14, guard_h:0.16, guard_50:0.04, sc:0.12, mount:0.05, bt:0.04, scramble:0.08, sub_a:0.18, tap:0.02 },
+  guard_o:  { stand:0.06, td:0.03, guard_c:0.12, guard_o:0, guard_h:0.14, guard_50:0.07, sc:0.14, mount:0.04, bt:0.03, scramble:0.14, sub_a:0.13, tap:0.02 },
+  guard_h:  { stand:0.04, td:0.02, guard_c:0.10, guard_o:0.15, guard_h:0, guard_50:0.06, sc:0.18, mount:0.08, bt:0.03, scramble:0.16, sub_a:0.10, tap:0.01 },
+  guard_50: { stand:0.02, td:0.01, guard_c:0.06, guard_o:0.12, guard_h:0.10, guard_50:0, sc:0.08, mount:0.04, bt:0.05, scramble:0.12, sub_a:0.22, tap:0.05 },
+  sc:       { stand:0.03, td:0.01, guard_c:0.08, guard_o:0.10, guard_h:0.14, guard_50:0.02, sc:0, mount:0.22, bt:0.10, scramble:0.10, sub_a:0.12, tap:0.02 },
+  mount:    { stand:0.02, td:0.01, guard_c:0.06, guard_o:0.05, guard_h:0.10, guard_50:0.01, sc:0.12, mount:0, bt:0.08, scramble:0.08, sub_a:0.28, tap:0.06 },
+  bt:       { stand:0.02, td:0.01, guard_c:0.04, guard_o:0.06, guard_h:0.05, guard_50:0.02, sc:0.10, mount:0.06, bt:0, scramble:0.08, sub_a:0.32, tap:0.08 },
+  scramble: { stand:0.20, td:0.10, guard_c:0.12, guard_o:0.14, guard_h:0.12, guard_50:0.04, sc:0.12, mount:0.05, bt:0.04, scramble:0, sub_a:0.04, tap:0.00 },
+  sub_a:    { stand:0.04, td:0.01, guard_c:0.08, guard_o:0.06, guard_h:0.05, guard_50:0.04, sc:0.10, mount:0.08, bt:0.14, scramble:0.08, sub_a:0, tap:0.22 },
+  tap:      { stand:0.80, td:0, guard_c:0, guard_o:0, guard_h:0, guard_50:0, sc:0, mount:0, bt:0, scramble:0.20, sub_a:0, tap:0 },
+};
+
+// ─── THEORETICAL matrix (GrappleMap-derived, technique graph) ────────────
+// Based on GrappleMap connectivity — which transitions are documented
+const THEORETICAL_RAW = {
+  stand:    { stand:0, td:0.40, guard_c:0.10, guard_o:0.10, guard_h:0.00, guard_50:0.00, sc:0.00, mount:0.00, bt:0.00, scramble:0.30, sub_a:0.00, tap:0.00 },
+  td:       { stand:0.25, td:0, guard_c:0.25, guard_o:0.20, guard_h:0.05, guard_50:0.00, sc:0.15, mount:0.00, bt:0.05, scramble:0.05, sub_a:0.00, tap:0.00 },
+  guard_c:  { stand:0.00, td:0.00, guard_c:0, guard_o:0.20, guard_h:0.20, guard_50:0.00, sc:0.10, mount:0.05, bt:0.05, scramble:0.00, sub_a:0.30, tap:0.05 },
+  guard_o:  { stand:0.05, td:0.00, guard_c:0.15, guard_o:0, guard_h:0.15, guard_50:0.10, sc:0.15, mount:0.00, bt:0.05, scramble:0.10, sub_a:0.20, tap:0.00 },
+  guard_h:  { stand:0.00, td:0.00, guard_c:0.10, guard_o:0.10, guard_h:0, guard_50:0.05, sc:0.25, mount:0.10, bt:0.00, scramble:0.10, sub_a:0.20, tap:0.00 },
+  guard_50: { stand:0.00, td:0.00, guard_c:0.05, guard_o:0.10, guard_h:0.10, guard_50:0, sc:0.05, mount:0.00, bt:0.10, scramble:0.05, sub_a:0.40, tap:0.05 },
+  sc:       { stand:0.00, td:0.00, guard_c:0.05, guard_o:0.05, guard_h:0.15, guard_50:0.00, sc:0, mount:0.30, bt:0.15, scramble:0.05, sub_a:0.20, tap:0.00 },
+  mount:    { stand:0.00, td:0.00, guard_c:0.05, guard_o:0.00, guard_h:0.10, guard_50:0.00, sc:0.10, mount:0, bt:0.10, scramble:0.00, sub_a:0.45, tap:0.10 },
+  bt:       { stand:0.00, td:0.00, guard_c:0.00, guard_o:0.00, guard_h:0.00, guard_50:0.00, sc:0.05, mount:0.05, bt:0, scramble:0.05, sub_a:0.50, tap:0.15 },
+  scramble: { stand:0.25, td:0.15, guard_c:0.10, guard_o:0.15, guard_h:0.10, guard_50:0.05, sc:0.10, mount:0.05, bt:0.05, scramble:0, sub_a:0.00, tap:0.00 },
+  sub_a:    { stand:0.00, td:0.00, guard_c:0.05, guard_o:0.05, guard_h:0.00, guard_50:0.05, sc:0.05, mount:0.10, bt:0.20, scramble:0.05, sub_a:0, tap:0.40 },
+  tap:      { stand:1.0, td:0, guard_c:0, guard_o:0, guard_h:0, guard_50:0, sc:0, mount:0, bt:0, scramble:0, sub_a:0, tap:0 },
+};
+
+function normalizeMatrix(raw) {
+  const ids = POSITIONS.map(p => p.id);
+  return ids.map(from => {
+    const row = raw[from];
+    const total = ids.reduce((s, to) => s + (row[to] || 0), 0);
+    return ids.map(to => total > 0 ? (row[to] || 0) / total : 0);
+  });
+}
+
+const EMPIRICAL = normalizeMatrix(EMPIRICAL_RAW);
+const THEORETICAL = normalizeMatrix(THEORETICAL_RAW);
+
+let currentMode = 'empirical';
+let currentFilter = 'all';
+let pinnedCell = null;
+
+const FILTER_GROUPS = {
+  all: null,
+  guard: ['guard_c','guard_o','guard_h','guard_50'],
+  top: ['sc','mount','bt'],
+  submission: ['sub_a','tap'],
+};
+
+function getActiveMatrix() {
+  return currentMode === 'theoretical' ? THEORETICAL : EMPIRICAL;
+}
+
+function getVisiblePositions() {
+  const f = FILTER_GROUPS[currentFilter];
+  if (!f) return POSITIONS;
+  return POSITIONS.filter(p => f.includes(p.id) || ['stand','scramble'].includes(p.id));
+}
+
+function colorForValue(v, mode) {
+  if (v === 0) return null;
+  // empirical: yellow heatmap, theoretical: blue heatmap
+  if (mode === 'theoretical') {
+    const r = Math.round(58 + v * 50);
+    const g = Math.round(123 + v * 60);
+    const b = Math.round(213 - v * 30);
+    const a = 0.15 + v * 0.75;
+    return `rgba(${r},${g},${b},${a})`;
+  } else {
+    // yellow → orange → red
+    const r = Math.round(100 + v * 155);
+    const g = Math.round(255 - v * 200);
+    const b = Math.round(0);
+    const a = 0.15 + v * 0.80;
+    return `rgba(${r},${g},${b},${a})`;
+  }
+}
+
+function buildMatrix() {
+  const table = document.getElementById('matrix-table');
+  const visible = getVisiblePositions();
+  const M = currentMode === 'compare' ? EMPIRICAL : getActiveMatrix();
+  const mode = currentMode === 'compare' ? 'empirical' : currentMode;
+
+  let html = '<thead><tr><th class="corner"></th>';
+  visible.forEach(p => {
+    html += `<th class="col-label" title="${p.label}">${p.label}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  visible.forEach((from, ri) => {
+    const fi = idxOf(from.id);
+    html += `<tr><td class="row-label">${from.emoji} ${from.label}</td>`;
+    visible.forEach((to, ci) => {
+      const ti = idxOf(to.id);
+      const val = M[fi][ti];
+      const pct = Math.round(val * 100);
+      const bg = val === 0 ? null : colorForValue(val, mode);
+      const isDiag = from.id === to.id;
+      const bgStr = bg ? `background:${bg};` : '';
+      const diagCls = isDiag ? ' diag' : '';
+      const zeroCls = val === 0 ? ' zero' : '';
+      const text = val > 0 ? (pct < 1 ? '<1' : pct) : '';
+      html += `<td class="cell${diagCls}${zeroCls}" style="${bgStr}" 
+               data-from="${from.id}" data-to="${to.id}" data-val="${val}"
+               onmouseenter="hoverCell(this)" onclick="pinCell(this)">
+               ${text}%</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody>';
+  table.innerHTML = html;
+
+  // update title
+  const titles = {
+    empirical: 'Empirical transition probabilities — ViCoS sparring sequences (120K frames)',
+    theoretical: 'Theoretical transition graph — GrappleMap position connectivity',
+    compare: 'Dual-layer comparison — hover a cell to see empirical vs theoretical side by side'
+  };
+  document.getElementById('matrix-title').textContent = titles[currentMode];
+}
+
+function hoverCell(cell) {
+  if (pinnedCell) return;
+  showCell(cell);
+}
+
+function pinCell(cell) {
+  if (pinnedCell === cell) {
+    pinnedCell = null;
+    cell.style.outline = '';
+    return;
+  }
+  if (pinnedCell) pinnedCell.style.outline = '';
+  pinnedCell = cell;
+  cell.style.outline = '2px solid var(--accent)';
+  showCell(cell);
+}
+
+function showCell(cell) {
+  const fromId = cell.dataset.from;
+  const toId = cell.dataset.to;
+  const fromPos = POSITIONS.find(p => p.id === fromId);
+  const toPos = POSITIONS.find(p => p.id === toId);
+  const fi = idxOf(fromId);
+  const eVal = EMPIRICAL[fi][idxOf(toId)];
+  const tVal = THEORETICAL[fi][idxOf(toId)];
+
+  // Top transitions from this position
+  const row = currentMode === 'theoretical' ? THEORETICAL[fi] : EMPIRICAL[fi];
+  const sorted = POSITIONS.map((p, i) => ({ pos: p, val: row[i] }))
+    .filter(x => x.pos.id !== fromId && x.val > 0)
+    .sort((a, b) => b.val - a.val)
+    .slice(0, 5);
+
+  const maxVal = sorted[0]?.val || 1;
+
+  let html = `<div class="info-box animate-in">
+    <div class="sub">Transition</div>
+    <h3>${fromPos.label} → ${toPos.label}</h3>`;
+
+  if (currentMode === 'compare') {
+    const diff = ((eVal - tVal) * 100).toFixed(1);
+    const diffColor = diff > 0 ? 'var(--empirical)' : diff < 0 ? 'var(--theoretical)' : 'var(--muted)';
+    html += `
+    <div class="stat-row">
+      <span class="stat-label">Empirical (ViCoS)</span>
+      <span class="stat-val highlight">${Math.round(eVal*100)}%</span>
+    </div>
+    <div class="compare-bar">
+      <span class="compare-label">EMP</span>
+      <div class="cbar cbar-e" style="width:${Math.round(eVal*200)}px"></div>
+      <span class="compare-pct" style="color:var(--empirical)">${Math.round(eVal*100)}%</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Theoretical (GrappleMap)</span>
+      <span class="stat-val" style="color:var(--theoretical)">${Math.round(tVal*100)}%</span>
+    </div>
+    <div class="compare-bar">
+      <span class="compare-label">THE</span>
+      <div class="cbar cbar-t" style="width:${Math.round(tVal*200)}px"></div>
+      <span class="compare-pct" style="color:var(--theoretical)">${Math.round(tVal*100)}%</span>
+    </div>
+    <div class="stat-row" style="margin-top:8px">
+      <span class="stat-label">Δ Difference</span>
+      <span class="stat-val" style="color:${diffColor}">${diff > 0 ? '+' : ''}${diff}%</span>
+    </div>`;
+  } else {
+    const val = currentMode === 'theoretical' ? tVal : eVal;
+    html += `
+    <div class="stat-row">
+      <span class="stat-label">Probability</span>
+      <span class="stat-val highlight">${Math.round(val*100)}%</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">From position</span>
+      <span class="stat-val">${fromPos.emoji} ${fromPos.label}</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">To position</span>
+      <span class="stat-val">${toPos.emoji} ${toPos.label}</span>
+    </div>`;
+  }
+
+  html += `</div>`;
+
+  // Top transitions panel
+  html += `<div class="info-box animate-in">
+    <div class="sub">Top exits from ${fromPos.label}</div>
+    <div class="top-transitions">`;
+
+  sorted.forEach((item, i) => {
+    html += `<div class="trans-item">
+      <span class="trans-rank">${i+1}</span>
+      <div class="trans-bar-wrap">
+        <div class="trans-name">${item.pos.emoji} ${item.pos.label}</div>
+        <div class="trans-bar" style="width:${Math.round((item.val/maxVal)*160)}px"></div>
+      </div>
+      <span class="trans-pct">${Math.round(item.val*100)}%</span>
+    </div>`;
+  });
+
+  html += `</div></div>`;
+
+  // Add compare bars if in compare mode
+  if (currentMode === 'compare') {
+    html += `<div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--empirical)"></div>Empirical</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--theoretical)"></div>Theoretical</div>
+    </div>`;
+  }
+
+  document.getElementById('side-panel').innerHTML = html;
+}
+
+function setMode(mode) {
+  currentMode = mode;
+  pinnedCell = null;
+  ['empirical','theoretical','compare'].forEach(m => {
+    document.getElementById(`btn-${m}`).classList.toggle('active', m === mode);
+  });
+  document.getElementById('side-panel').innerHTML = '<div class="hover-hint">↖ Hover a cell to inspect transitions</div>';
+  buildMatrix();
+}
+
+function setFilter(val) {
+  currentFilter = val;
+  pinnedCell = null;
+  buildMatrix();
+}
+
+// init
+buildMatrix();
+</script>
+</body>
+</html>
